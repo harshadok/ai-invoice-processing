@@ -1,99 +1,92 @@
 # AI Invoice Processing System
 
-**Status: Planning / documentation only.** This repository currently contains a project specification and implementation roadmap. No working application, provider integration, deployment, or measured results are included yet.
+Extract invoice text and fields, validate financial arithmetic, correct fields, explicitly review the result, and export JSON or CSV.
 
-A personal learning project by [Harshad Odakkal](https://github.com/harshadok), building on professional Flutter and mobile engineering experience while transitioning toward AI/mobile engineering.
+**Implemented local portfolio application**, with source, persistent storage, runnable API, synthetic examples, automated tests, and a demo script. The interactive API at `/docs` is the included client. This repository does not claim a production deployment, a native mobile client, or previously measured customer usage.
 
-## Problem and goal
+## Features
 
-Convert invoice images or PDFs into structured records that users can validate before exporting.
+- UTF-8 TXT/Markdown, text PDFs, and PNG/JPEG images.
+- Real image OCR: Apple Vision on macOS, Tesseract on Linux.
+- Local-model extraction constrained by an invoice JSON schema.
+- Decimal arithmetic with explicit half-up rounding, required-field checks, line checks, subtotal/tax/total validation.
+- Duplicate-content detection, optimistic version checks, persisted corrections and review status.
+- Export is blocked until review succeeds; CSV textual fields are protected against spreadsheet formula interpretation.
+- Failed/incomplete model extraction remains visible and can be corrected manually.
 
-## Skills to practise
+## Install and run
 
-- Optical Character Recognition (OCR)
-- Structured outputs
-- Data validation
-- Document extraction
-- Human review workflows
+Use Python 3.9–3.12 (developed/tested here with 3.9.6; Python 3.11 is recommended for a new environment).
 
-## Planned end-to-end workflow
-
-1. Upload a synthetic invoice image or PDF.
-2. Extract text using an OCR adapter while preserving relevant source references.
-3. Map extracted text into a defined invoice schema.
-4. Validate required fields, types, dates, currency, and line-item arithmetic.
-5. Flag missing or inconsistent values for human review without inventing data.
-6. Save the reviewed result and export structured JSON or CSV.
-
-## Proposed architecture
-
-Flutter upload and review client; Python API service; OCR adapter; schema-constrained LLM extraction adapter; validation layer; relational storage.
-
-The stack is a design proposal. Specific providers, libraries, model versions, and database products will be selected and documented during implementation.
-
-## Planned API surface
-
-- `POST /invoices` — upload an invoice
-- `GET /invoices/{id}` — retrieve extraction and validation findings
-- `PATCH /invoices/{id}` — submit reviewed field corrections
-- `GET /invoices/{id}/export` — export a reviewed record
-
-These endpoints are proposed contracts; they are not implemented.
-
-## Core data model
-
-Invoice(vendor, invoice_number, invoice_date, currency, line_items, subtotal, tax, total); ValidationIssue(field, rule, message); Review(status, corrections).
-
-## Flutter/mobile experience
-
-Camera or file upload, side-by-side source and extracted fields, validation warnings, correction form, and export action.
-
-## Evaluation and acceptance plan
-
-- [ ] Measure per-field extraction accuracy against synthetic labelled invoices.
-- [ ] Validate totals using decimal arithmetic and explicit rounding rules.
-- [ ] Test missing fields, multiple currencies, duplicate invoices, and malformed dates.
-- [ ] Confirm invalid or incomplete records cannot silently pass as reviewed.
-- [ ] Compare OCR errors with extraction errors to identify the failing stage.
-
-No accuracy, latency, cost, or reliability results have been measured. Results will be added only after reproducible runs.
-
-## Implementation roadmap
-
-- [ ] **Milestone 1:** Define the invoice schema and build synthetic invoice fixtures.
-- [ ] **Milestone 2:** Add OCR text extraction and inspect raw output.
-- [ ] **Milestone 3:** Add structured extraction with missing-value handling.
-- [ ] **Milestone 4:** Implement deterministic validation and a human correction flow.
-- [ ] **Milestone 5:** Build the Flutter review interface and publish field-level evaluation results.
-
-## Planned demonstration
-
-Process a synthetic invoice with an intentionally incorrect total, show the validation issue, correct it, and export the reviewed JSON.
-
-## Data and operational boundaries
-
-Use synthetic financial documents for demonstrations. Do not execute payment actions; extraction and review do not establish that an invoice is legitimate.
-
-## Getting started today
-
-1. Read the proposed workflow and choose the first milestone.
-2. Decide on providers and local development tools; record those decisions before implementation.
-3. Add application code and a reproducible setup guide as the first milestone is built.
-4. Use synthetic or public test data and keep credentials outside version control.
-
-**There is no runnable quick start yet.** Installation and run commands will be added when code exists.
-
-## Suggested future layout
-
-```text
-apps/mobile/        # Planned Flutter client
-services/api/       # Planned application API
-evals/              # Planned fixtures and evaluation runs
-docs/               # Architecture decisions and demonstration notes
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
 ```
 
-These directories describe the intended structure and have not been implemented.
+For AI operations, install [Ollama](https://ollama.com/download), start its local server, and pull a model:
 
-## Portfolio context
+```sh
+ollama serve
+# In a second terminal:
+ollama pull qwen2.5:1.5b
+export AI_MODEL=qwen2.5:1.5b
+./scripts/start.sh
+```
 
-This is an independent planned portfolio project, not client work or a production deployment. Its current scope is documentation; update the status and roadmap as working milestones are completed.
+Open [interactive API docs](http://127.0.0.1:8102/docs). The default service port is 8102; override with `PORT`. Keep one API worker bound to localhost. This single-user application has no authentication and stores development data in ignored `data/`; do not expose it as a multi-user public service.
+
+Configuration is read from environment variables. `.env.example` documents them but is not automatically executed or loaded. `OLLAMA_BASE_URL` defaults to `http://127.0.0.1:11434`; `AI_MODEL` selects the installed local model. Providers run on the backend computer; the initial model downloads need internet. No paid API credentials are required.
+
+`requirements.txt` contains portable version ranges; `requirements-lock.txt`, when present, records the exact versions installed in this macOS development environment.
+
+## Walkthrough
+
+1. Multipart upload a file to `POST /invoices`.
+2. Inspect the returned `source_text`, `data`, `issues`, `status`, `id`, and `version`.
+3. Correct the complete structured record with `PATCH /invoices/{id}` and `{"version":1,"data":...}`. A full example is in `examples/corrected.json`.
+4. Resolve all validation issues. Call `POST /invoices/{id}/review` with the current version.
+5. Download `/invoices/{id}/export?format=json` or `?format=csv`.
+6. Editing a reviewed record returns it to `needs_review`; stale versions return 409.
+7. List and reopen persisted invoices with `GET /invoices` and `GET /invoices/{id}`.
+
+With the API running, execute the synthetic walkthrough in another terminal:
+
+```sh
+source .venv/bin/activate
+python scripts/demo.py
+```
+
+Use `--url http://127.0.0.1:PORT` to target a different local port. `/docs` exposes the full request and response schemas for manual testing.
+
+## Tests
+
+```sh
+python -m pytest -q
+```
+
+The current automated suite has **6 passing tests** covering workflow behaviour and important failures. Tests inject provider doubles to remain deterministic; `VERIFICATION.md` separately records real-provider checks. Automated CI runs the deterministic suite without model credentials. The synthetic demo is not a production accuracy benchmark.
+
+## OCR prerequisites and sample
+
+On macOS, install Xcode Command Line Tools (`xcode-select --install`) if Swift is unavailable. The shipped `native/ocr.swift` uses Vision; the app compiles it once into ignored `.tools/ocr`. On Linux install the `tesseract` executable and English language data. No system package installation is performed automatically.
+
+`examples/invoice.png` and `examples/invoice.txt` contain the same entirely synthetic invoice. The expected reviewed data is `examples/corrected.json`. A missing model produces a persisted `extraction_failed` record which supports the same manual correction/review flow.
+
+Modules: `app/main.py` contains parsing, OCR, schema, deterministic validation, versioned review, and export. `app/runtime.py` contains persistence and the local-model adapter.
+
+## Operational boundaries
+
+- 10 MB uploads; PDFs up to 30 pages; images up to 16 megapixels; extracted text up to 24,000 characters. Scanned PDFs must be supplied as separate page images for OCR.
+- Supported currency codes: INR, USD, EUR, GBP. Calculations use two-decimal monetary rounding. Discounts, multi-currency invoices, complex tax rules and accounting-system integrations are outside this local implementation.
+- OCR and LLM extraction can be incomplete or wrong. Null/missing fields and arithmetic mismatches block review. Human review is required even when checks pass.
+- Extracted text and structured records are saved locally; original uploads are not retained. SHA-256 content IDs detect exact duplicate uploads, not all semantically duplicate invoices.
+- No payment execution or claim of invoice legitimacy is made.
+
+## Technical references
+
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Ollama API](https://github.com/ollama/ollama/blob/main/docs/api.md)
+- [Apple Vision](https://developer.apple.com/documentation/vision/recognizing-text-in-images)
+- [Tesseract command line](https://tesseract-ocr.github.io/tessdoc/Command-Line-Usage.html)

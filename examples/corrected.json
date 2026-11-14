@@ -1,0 +1,1 @@
+{"vendor":"Northwind Studio","invoice_number":"INV-1001","invoice_date":"2026-11-01","currency":"INR","line_items":[{"description":"Design consultation","quantity":"2","unit_price":"500.00","amount":"1000.00"}],"subtotal":"1000.00","tax":"180.00","total":"1180.00"}

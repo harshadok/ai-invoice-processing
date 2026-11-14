@@ -1,0 +1,12 @@
+INVOICE
+Vendor: Northwind Studio
+Invoice number: INV-1001
+Invoice date: 2026-11-01
+Currency: INR
+Description: Design consultation
+Quantity: 2
+Unit price: 500.00
+Line amount: 1000.00
+Subtotal: 1000.00
+Tax: 180.00
+Total: 1180.00
